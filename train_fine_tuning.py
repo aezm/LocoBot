@@ -219,6 +219,20 @@ def main(config):
         )
     else:
         raise ValueError(f"Model {config['model']} not supported")
+    
+    # fine-tuning method: freezing
+    if "freezing" in config and config["freezing"] == True:
+        for k, v in model.named_parameters():
+            print(k)
+        # print(model)
+        for param in model.obs_encoder.parameters():
+            param.requires_grad = False
+        for param in model.goal_encoder.parameters():
+            param.requires_grad = False
+        # for param in model.compress_obs_enc.parameters():
+        #     param.requires_grad = False
+        # for param in model.compress_goal_enc.parameters():
+        #     param.requires_grad = False
 
     if config["clipping"]:
         print("Clipping gradients to", config["max_norm"])
@@ -300,17 +314,34 @@ def main(config):
         if scheduler is not None and "scheduler" in latest_checkpoint:
             scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    if "freezing" in config:
-        if config["freezing"] == True:
-            print(model)
-            for param in model.obs_encoder.parameters():
-                param.requires_grad = False
-            for param in model.goal_encoder.parameters():
-                param.requires_grad = False
-            for param in model.compress_obs_enc.parameters():
-                param.requires_grad = False
-            for param in model.compress_goal_enc.parameters():
-                param.requires_grad = False
+    # update optimizer if freezing
+    # (!) have no idea how to update the origin optimizer, so here just define a new optimizer
+    if "freezing" in config and config["freezing"] == True:
+        print("optimizer update")
+        if config["optimizer"] == "adam":
+            optimizer = Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, betas=(0.9, 0.98))
+        elif config["optimizer"] == "adamw":
+            optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+        elif config["optimizer"] == "sgd":
+            optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, momentum=0.9)
+        else:
+            raise ValueError(f"Optimizer {config['optimizer']} not supported")
+            
+    # print the freezing parameters number and parammeters
+    total_num = 0
+    freezed_num = 0
+    pass_num = 0
+    for (name, param) in model.named_parameters():
+        total_num += 1
+        if param.requires_grad == False:
+            freezed_num += 1
+        else:
+            pass_num += 1
+    print('\n Total {} params, freeze {}, miss {}'.format(total_num, freezed_num, pass_num))
+    for param in model.obs_encoder._bn0.parameters():
+        print(param)
+        print("1")
+    # return
 
     if config["model_type"] == "vint" or config["model_type"] == "gnm": 
         train_eval_loop(
@@ -358,6 +389,11 @@ def main(config):
             eval_fraction=config["eval_fraction"],
             eval_freq=config["eval_freq"],
         )
+
+    # print the parameters and check if the freezing part has changed
+    for param in model.obs_encoder._bn0.parameters():
+        print(param)
+        print("2")
 
     print("FINISHED TRAINING")
 
