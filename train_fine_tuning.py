@@ -323,7 +323,7 @@ def main(config):
         else:
             raise ValueError(f"Optimizer {config['optimizer']} not supported")
             
-    # print the freezing parameters number
+    # print the number of freezing parameters
     total_num = 0
     freezed_num = 0
     pass_num = 0
@@ -391,6 +391,7 @@ def main(config):
     layer_params2 = list(model.obs_encoder._bn0.parameters())
     for i, param in enumerate(layer_params2):
         print(f"Parameter {i} after training:\n", param)
+        
     # check if the example parameters have not changed
     params_check = all(torch.equal(p1, p2) for p1, p2 in zip(layer_params1, layer_params2))
     print("The parameters have not changed:", params_check)
