@@ -219,20 +219,6 @@ def main(config):
         )
     else:
         raise ValueError(f"Model {config['model']} not supported")
-    
-    # fine-tuning method: freezing
-    if "freezing" in config and config["freezing"] == True:
-        for k, v in model.named_parameters():
-            print(k)
-        # print(model)
-        for param in model.obs_encoder.parameters():
-            param.requires_grad = False
-        for param in model.goal_encoder.parameters():
-            param.requires_grad = False
-        # for param in model.compress_obs_enc.parameters():
-        #     param.requires_grad = False
-        # for param in model.compress_goal_enc.parameters():
-        #     param.requires_grad = False
 
     if config["clipping"]:
         print("Clipping gradients to", config["max_norm"])
@@ -314,9 +300,19 @@ def main(config):
         if scheduler is not None and "scheduler" in latest_checkpoint:
             scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    # update optimizer if freezing
-    # (!) have no idea how to update the origin optimizer, so here just define a new optimizer
+    # fine-tuning method: freezing
     if "freezing" in config and config["freezing"] == True:
+        # print model parts
+        for k, v in model.named_parameters():
+            print(k)
+        # freezing parts
+        for i in config["freezing_parts"]:
+            print(i)
+            layer = getattr(model, i)
+            for param in layer.parameters():
+                param.requires_grad = False
+        # update optimizer
+        # (!) have no idea how to update the origin optimizer, so here just define a new optimizer
         print("optimizer update")
         if config["optimizer"] == "adam":
             optimizer = Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, betas=(0.9, 0.98))
@@ -327,7 +323,7 @@ def main(config):
         else:
             raise ValueError(f"Optimizer {config['optimizer']} not supported")
             
-    # print the freezing parameters number and parammeters
+    # print the freezing parameters number
     total_num = 0
     freezed_num = 0
     pass_num = 0
@@ -338,10 +334,11 @@ def main(config):
         else:
             pass_num += 1
     print('\n Total {} params, freeze {}, miss {}'.format(total_num, freezed_num, pass_num))
-    for param in model.obs_encoder._bn0.parameters():
-        print(param)
-        print("1")
-    # return
+
+    # save and print example parameters before training
+    layer_params1 = list(model.obs_encoder._bn0.parameters())
+    for i, param in enumerate(layer_params1):
+        print(f"Parameter {i} before training:\n", param)
 
     if config["model_type"] == "vint" or config["model_type"] == "gnm": 
         train_eval_loop(
@@ -390,10 +387,13 @@ def main(config):
             eval_freq=config["eval_freq"],
         )
 
-    # print the parameters and check if the freezing part has changed
-    for param in model.obs_encoder._bn0.parameters():
-        print(param)
-        print("2")
+    # save and print example parameters after training
+    layer_params2 = list(model.obs_encoder._bn0.parameters())
+    for i, param in enumerate(layer_params2):
+        print(f"Parameter {i} after training:\n", param)
+    # check if the example parameters have not changed
+    params_check = all(torch.equal(p1, p2) for p1, p2 in zip(layer_params1, layer_params2))
+    print("The parameters have not changed:", params_check)
 
     print("FINISHED TRAINING")
 
@@ -407,7 +407,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         "-c",
-        default="config/vint.yaml",
+        default="config/default.yaml",
         type=str,
         help="Path to the config file in train_config folder",
     )

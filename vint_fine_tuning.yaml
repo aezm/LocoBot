@@ -1,5 +1,5 @@
-project_name: vint-training
-run_name: bc4f
+project_name: vint-debugging
+run_name: first
 
 # training setup
 load_run: vint  #relative path from 'logs' to the checkpoint
@@ -22,7 +22,8 @@ plateau_factor: 0.5
 seed: 0
 
 # fine-tuning methods
-freezing: True 
+freezing: True
+freezing_parts: ["obs_encoder", "goal_encoder"]
 
 # model params
 model_type: vint
